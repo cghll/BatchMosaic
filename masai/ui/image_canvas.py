@@ -262,6 +262,30 @@ class ImageCanvas(QGraphicsView):
         self.refresh_preview()
         self.fit_view()
 
+    def clear_image(self) -> None:
+        """清空参考图、预览与全部区域，回到初始空画布状态。
+
+        load_folder() 会用下一张参考图覆盖画布，而「重置」没有下一张图，
+        必须显式释放像素并复位缩放，否则左栏已空、画布仍停留着上一批图片。
+        """
+        if self._temp is not None:
+            self._scene.removeItem(self._temp)
+            self._temp = None
+        self._draw_start = None
+        self._resize = None
+        self._panning = False
+        self.setCursor(Qt.ArrowCursor)
+
+        self._clear_items()
+        self._pil = None
+        self._arr = None
+        self._size = (0, 0)
+        self._pix.setPixmap(QPixmap())
+        self._scene.setSceneRect(QRectF(0, 0, 0, 0))
+        self.resetTransform()
+        self.zoomChanged.emit(1.0)
+        self.viewport().update()
+
     def has_image(self) -> bool:
         return self._pil is not None
 

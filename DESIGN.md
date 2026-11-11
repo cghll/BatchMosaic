@@ -72,6 +72,7 @@
 | hover / focus / pressed | 按钮、工具按钮、列表行、滑块手柄、复选框均有独立态；焦点用强调色 1px 描边，不移除 |
 | 选中 | 列表行强调色软底；画布区域实线 2px + 四角控制点 + 编号徽标；未选中区域虚线 1.6px |
 | 禁用 | 主操作失去实心填充；导入、视图、右栏、画布在导出中整体禁用 |
+| 会话重置 | 已导入时顶部动作改写为「更换文件夹」，左栏出现带边框的「重置工作区」；点击后清空图片、区域、画布与计数，回到完整空状态，按钮转为禁用 |
 | 进行中 | 状态点转强调色、进度条出现、取消按钮出现、状态文案给出 `处理中 2/3 · 文件名` |
 | 完成 / 失败 / 取消 | 状态点绿 / 红 / 中性，文案给出张数与输出目录，失败清单列出文件名与原因 |
 | 警告 | 宽高比不同的图片行：线性三角图标 **+** 琥珀色「宽高比不同」文字 + 完整 tooltip（图标与文字同时存在，不再用 `⚠` 字形顶替图标） |
@@ -97,8 +98,9 @@ Unicode 字形充当图标。**
   `slider_block`、`spin_block`、`act_export`、`lbl_regions`、`load_folder()`、
   `canvas._add_item()` / `_emit_regions()` 等。
 - 主题是会话内的，不写入配置文件，符合产品「不记住上次设置」的约定。
-- 视觉上新增了「每行删除区域」按钮、缩放读数、空状态、操作提示，但没有改变
-  区域模型的归一化语义。
+- 视觉上新增了「每行删除区域」按钮、缩放读数、空状态、操作提示、左栏
+  「重置工作区」，但没有改变区域模型的归一化语义；`load_folder()` 的覆盖式
+  导入行为保持原样，只是多了一条显式清空路径。
 
 ---
 
@@ -116,6 +118,11 @@ Unicode 字形充当图标。**
 | 6 | 浅色主题下画布提示条几乎看不见 | 浮层改 `panel` 底 + `border_strong` 描边，提示文字改用 `text_sub` |
 | 7 | offscreen 截图全是豆腐块，且栏宽被撑成 439px | 验证脚本指定 `QT_QPA_FONTDIR`；字体栈补 `Noto Sans SC` / `DengXian`；面板补最小宽度 |
 | 8 | 「空状态」截图其实是清空列表后的残留画布 | 验证脚本改为新建窗口截取真实空状态 |
+| 9 | 导入后左栏没有显式重置入口，且文件夹对话框默认停在已导入文件夹内部，看起来「无法再导入别的文件夹」 | 新增 `ImageCanvas.clear_image()` 与 `MainWindow._reset_session()/_clear_session()`；左栏加「重置工作区」按钮；顶部动作按状态改写为「更换文件夹」；`_folder_dialog_start()` 从当前文件夹的父目录开始 |
+
+第 9 项是交付后由真实使用反馈发现的 affordance 缺口，不是状态机错误：`load_folder()` 本来就
+能覆盖状态，缺的是「清空」这一条独立路径与对话框的默认起始位置。修复后新增
+`test_reset_session_clears_state_and_allows_reimport` 作为回归锁。
 
 ### 对比度验证（WCAG，全部 ≥ 4.5:1）
 
@@ -141,7 +148,7 @@ Unicode 字形充当图标。**
 ### 验证命令与结果
 
 ```
-python -m pytest tests -q                     → 47 passed in 1.58s
+python -m pytest tests -q                     → 48 passed in 2.48s
 python -m masai (offscreen 启动冒烟)          → 2.5s 后仍存活，stdout/stderr 为空
 theme_manager().toggle() × 2                 → QSS 改变并恢复、画布底色 #0c1016 ↔ #e7ebf1、按钮文案 浅色 ↔ 深色
 ```
@@ -168,6 +175,9 @@ theme_manager().toggle() × 2                 → QSS 改变并恢复、画布�
 | `light-populated.png` / `light-selected.png` | 浅色对应状态 |
 | `light-export-dialog.png` | 浅色，导出对话框 |
 | `light-empty.png` | 浅色，全新窗口空状态 |
+| `dark-reset-before.png` | 深色，已导入且有区域，左栏「重置工作区」可用、顶部为「更换文件夹」 |
+| `dark-reset-after.png` | 深色，点击重置后的完整空状态，按钮禁用、画布无残留 |
+| `dark-reset-reimport.png` / `light-reset-reimport.png` | 深色 / 浅色，重置后再导入另一个文件夹 |
 
 `crop-*.png` 是 review 过程中为放大检查工具栏按钮与禁用态生成的临时裁切，不属于交付面。
 

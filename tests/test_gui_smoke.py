@@ -11,7 +11,7 @@ pytest.importorskip("PySide6")
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 from PySide6.QtCore import QRectF  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 from masai.ui.main_window import MainWindow  # noqa: E402
 
@@ -97,6 +97,54 @@ def test_export_requires_regions(app, tmp_path):
     try:
         window.load_folder(folder)
         assert not window.act_export.isEnabled()
+    finally:
+        window.close()
+
+
+def test_reset_session_clears_state_and_allows_reimport(app, tmp_path, monkeypatch):
+    """导入后必须能重置回空状态，再导入另一个文件夹；对话框不能停在旧目录内。"""
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *args, **kwargs: QMessageBox.Yes)
+    folder_a = make_folder(tmp_path)
+    folder_b = tmp_path / "another"
+    folder_b.mkdir()
+    Image.fromarray(
+        np.random.default_rng(9).integers(0, 256, (240, 320, 3), dtype=np.uint8)
+    ).save(folder_b / "b.png")
+
+    window = MainWindow()
+    try:
+        assert not window.btn_reset.isEnabled()
+        window.load_folder(folder_a)
+        window.canvas._add_item(QRectF(10, 10, 80, 60)).setSelected(True)
+        window.canvas._emit_regions()
+        assert window._regions and window.act_export.isEnabled()
+        assert window.act_import.text() == "更换文件夹"
+        assert window._folder_dialog_start() == folder_a.parent
+
+        window.btn_reset.click()
+        assert window._folder is None
+        assert window._images == [] and window._sizes == {}
+        assert window._regions == [] and window._ref_index == -1
+        assert window._ref_size == (0, 0)
+        assert window.list_images.count() == 0
+        assert window.list_regions.count() == 0
+        assert not window.canvas.has_image()
+        assert window.canvas.image_size() == (0, 0)
+        assert window.image_stack.currentIndex() == 0
+        assert window.lbl_folder.text() == "尚未导入"
+        assert window.lbl_zoom.text() == "100%"
+        assert not window.act_export.isEnabled()
+        assert not window.btn_reset.isEnabled()
+        assert window.act_import.text() == "导入文件夹"
+        assert window._folder_dialog_start() == folder_a.parent
+
+        window.load_folder(folder_b)
+        assert window._folder == folder_b
+        assert window.list_images.count() == 1
+        assert window.canvas.has_image()
+        assert window._regions == []
+        assert window.act_import.text() == "更换文件夹"
     finally:
         window.close()
 

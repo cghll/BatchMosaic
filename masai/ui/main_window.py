@@ -263,6 +263,14 @@ class MainWindow(QMainWindow):
         self.lbl_folder.setWordWrap(True)
         self.lbl_folder.setToolTip("当前导入的文件夹")
         layout.addWidget(self.lbl_folder)
+
+        # 导入之后必须能显式清空当前会话，否则只能覆盖、无法回到空状态；
+        # 这里是唯一直接操作「当前文件夹」的入口，与顶部导入动作区分开。
+        self.btn_reset = QPushButton("重置工作区", panel)
+        self.btn_reset.setIconSize(QSize(16, 16))
+        self.btn_reset.setCursor(Qt.PointingHandCursor)
+        self.btn_reset.setToolTip("清空当前导入的文件夹、图片与区域，返回初始状态")
+        layout.addWidget(self.btn_reset)
         return panel
 
     def _build_empty_list(self) -> QWidget:
@@ -451,7 +459,7 @@ class MainWindow(QMainWindow):
         self.status_dot.setFixedSize(8, 8)
         row.addWidget(self.status_dot)
 
-        self.lbl_status = QLabel("导入文件夹开始", bar)
+        self.lbl_status = QLabel("请导入图片文件夹", bar)
         self.lbl_status.setObjectName("statusLabel")
         row.addWidget(self.lbl_status, 1)
 
@@ -489,6 +497,7 @@ class MainWindow(QMainWindow):
         self.btn_delete.setIcon(icon("trash", sub, 16, muted))
         self.btn_clear.setIcon(icon("clear", sub, 16, muted))
         self.btn_cancel.setIcon(icon("clear", palette.danger, 16, muted))
+        self.btn_reset.setIcon(icon("reset", sub, 16, muted))
         self._brand_icon.setPixmap(pixmap("grid", palette.accent, 18))
         self._empty_list_icon.setPixmap(pixmap("image", muted, 30))
         self._empty_guide_icon.setPixmap(pixmap("region", palette.accent, 32))
@@ -525,6 +534,7 @@ class MainWindow(QMainWindow):
 
         self.btn_delete.clicked.connect(self.canvas.remove_selected)
         self.btn_clear.clicked.connect(self._clear_regions)
+        self.btn_reset.clicked.connect(self._reset_session)
 
         self.slider_block.valueChanged.connect(self._on_block_changed)
         self.spin_block.valueChanged.connect(self._on_block_changed)
@@ -535,11 +545,67 @@ class MainWindow(QMainWindow):
         self.lbl_zoom.setText(f"{round(scale * 100)}%")
 
     # ---------------- 导入 ----------------
+    def _folder_dialog_start(self) -> Path:
+        """文件夹对话框的起始目录。
+
+        已导入时从当前文件夹的父目录开始，让同级目录一目了然；否则沿用上次
+        位置的父目录或用户主目录。旧实现直接停在当前文件夹内部，用户想换到
+        别的文件夹时会被困在里面，看起来像是「没法再导入」。
+        """
+        if self._folder is not None:
+            return self._folder.parent
+        return self._last_dir or Path.home()
+
     def _choose_folder(self) -> None:
-        start = str(self._last_dir or Path.home())
-        path = QFileDialog.getExistingDirectory(self, "选择图片文件夹", start)
+        path = QFileDialog.getExistingDirectory(
+            self, "选择图片文件夹", str(self._folder_dialog_start()))
         if path:
             self.load_folder(Path(path))
+
+    def _reset_session(self) -> None:
+        """显式清空当前会话，与「覆盖式再导入」互补。"""
+        if self._worker is not None or not self._images:
+            return
+        if self._regions:
+            answer = QMessageBox.question(
+                self, "重置工作区",
+                "重置将清除当前导入的文件夹、图片列表与已框选的区域，是否继续？")
+            if answer != QMessageBox.Yes:
+                return
+        self._clear_session()
+
+    def _clear_session(self) -> None:
+        """复位全部导入状态，并同步刷新列表、画布、计数与状态栏。"""
+        if self._folder is not None:
+            # 重置后保留父目录，方便下一次直接选到同级文件夹
+            self._last_dir = self._folder.parent
+        self._folder = None
+        self._images = []
+        self._sizes = {}
+        self._regions = []
+        self._ref_index = -1
+        self._ref_size = (0, 0)
+        self._reset_block = False
+        self._block_fraction = block_fraction_from_pixels(DEFAULT_BLOCK_PX, 1000)
+        self._preview_timer.stop()
+
+        for widget in (self.slider_block, self.spin_block):
+            widget.blockSignals(True)
+            widget.setValue(DEFAULT_BLOCK_PX)
+            widget.blockSignals(False)
+
+        self.list_images.blockSignals(True)
+        self.list_images.clear()
+        self.list_images.clearSelection()
+        self.list_images.blockSignals(False)
+
+        self.canvas.clear_image()
+        self._refresh_image_list()
+        self._refresh_region_list()
+        self.progress.setVisible(False)
+        self.progress.setValue(0)
+        self._update_state()
+        self.lbl_status.setText("已重置，请导入图片文件夹")
 
     def load_folder(self, folder: Path) -> None:
         images = scan_images(folder)
@@ -787,6 +853,12 @@ class MainWindow(QMainWindow):
         self.act_fit.setEnabled(has_images)
         self.act_zoom_in.setEnabled(has_images)
         self.act_zoom_out.setEnabled(has_images)
+        self.btn_reset.setEnabled(has_images and self._worker is None)
+        # 已导入时把顶部动作改写成「更换文件夹」，明确它仍然可用
+        self.act_import.setText("更换文件夹" if has_images else "导入文件夹")
+        self.act_import.setToolTip(
+            "选择其他图片文件夹（Ctrl+O）" if has_images
+            else "选择一个图片文件夹（Ctrl+O）")
 
         self.image_stack.setCurrentIndex(1 if has_images else 0)
         self.empty_guide.setVisible(not has_images)
@@ -805,7 +877,7 @@ class MainWindow(QMainWindow):
             parts.append(f"{len(self._regions)} 个区域")
         if has_images:
             parts.append(f"块 {block_px} px")
-        self.lbl_status.setText(" · ".join(parts) if parts else "导入文件夹开始")
+        self.lbl_status.setText(" · ".join(parts) if parts else "请导入图片文件夹")
         if self._worker is None:
             self._sync_status_dot("idle")
 
@@ -900,6 +972,7 @@ class MainWindow(QMainWindow):
         self.btn_cancel.setEnabled(busy)
         self.progress.setVisible(busy)
         self.list_images.setEnabled(not busy)
+        self.btn_reset.setEnabled(not busy and bool(self._images))
         self.splitter.widget(2).setEnabled(not busy)
         self.canvas.setEnabled(not busy)
         self._sync_status_dot("busy" if busy else "idle")

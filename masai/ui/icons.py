@@ -100,6 +100,10 @@ _PATHS: dict[str, str] = {
         '<path d="M12 3v11.5M7.5 10.5 12 15l4.5-4.5"/>'
         '<path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>'
     ),
+    "reset": (
+        '<path d="M20 11a8 8 0 1 1-2.35-5.65"/>'
+        '<path d="M20 4v6h-6"/>'
+    ),
 }
 
 _STROKE_WIDTH = 1.6

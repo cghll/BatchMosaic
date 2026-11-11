@@ -10,7 +10,7 @@
 [![PySide6 / Qt 6](https://img.shields.io/badge/PySide6-Qt%206-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
 [![Pillow](https://img.shields.io/badge/Pillow-10%2B-8A6FBE?style=for-the-badge&logo=pypi&logoColor=white)](https://python-pillow.org/)
 [![NumPy](https://img.shields.io/badge/NumPy-1.24%2B-013243?style=for-the-badge&logo=numpy&logoColor=white)](https://numpy.org/)
-[![47 tests](https://img.shields.io/badge/Tests-47%20passed-6B4FBB?style=for-the-badge&logo=pytest&logoColor=white)]()
+[![48 tests](https://img.shields.io/badge/Tests-48%20passed-6B4FBB?style=for-the-badge&logo=pytest&logoColor=white)]()
 [![MIT](https://img.shields.io/badge/License-MIT-2EA44F?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 </div>
@@ -62,8 +62,11 @@ run.bat
 python -m pytest tests -q
 ```
 
-47 个测试覆盖马赛克边界与不外溢、EXIF、导出格式、批量取消和界面冒烟。
+48 个测试覆盖马赛克边界与不外溢、EXIF、导出格式、批量取消和界面冒烟。
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 cghll — 随便用，出问题别找我。
+本项目依据 [MIT License](LICENSE) 发布，Copyright © 2026 cghll。
+
+软件按「现状」（AS IS）提供，不附带任何明示或默示的担保。使用者应自行评估其适用性，
+因使用本软件所产生的风险及相应后果，由使用者自行承担。完整条款详见 [LICENSE](LICENSE)。
