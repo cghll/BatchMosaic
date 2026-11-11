@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# 运行时日志与写权限探针
+*.log
+.masai_write_test
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地 AI 工具与验证产物：保留在本机，不入库
+.workbuddy-ai/
+.impeccable/
+PRODUCT.md

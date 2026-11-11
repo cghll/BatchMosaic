@@ -1,0 +1,5 @@
+* text=auto
+
+# run.bat 必须保持 GBK/ANSI 编码 + CRLF 换行；
+# 让 git 转换换行会导致 cmd.exe 解析错位（症状：双击没反应）。
+run.bat -text
