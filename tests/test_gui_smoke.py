@@ -168,3 +168,13 @@ def test_reference_image_honours_exif_orientation(app, tmp_path):
         assert not window.list_images.item(0).text().startswith("⚠")
     finally:
         window.close()
+
+
+def test_pdf_conversion_action_is_available(app):
+    window = MainWindow()
+    try:
+        assert window.act_pdf.isEnabled()
+        assert "PDF" in window.act_pdf.text()
+        assert not window.act_pdf.icon().isNull()
+    finally:
+        window.close()

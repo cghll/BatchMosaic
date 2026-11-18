@@ -104,6 +104,12 @@ _PATHS: dict[str, str] = {
         '<path d="M20 11a8 8 0 1 1-2.35-5.65"/>'
         '<path d="M20 4v6h-6"/>'
     ),
+    "pdf": (
+        '<path d="M6 3h8l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4'
+        'a1 1 0 0 1 1-1z"/>'
+        '<path d="M14 3v4h4"/>'
+        '<path d="M8.5 12h7M8.5 16h4.5"/>'
+    ),
 }
 
 _STROKE_WIDTH = 1.6

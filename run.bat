@@ -3,13 +3,13 @@ setlocal
 cd /d "%~dp0"
 
 rem ---------------- 依赖检查：缺了就自动装 ----------------
-python -c "import PySide6, PIL, numpy" >nul 2>nul
+python -c "import PySide6, PIL, numpy, pypdfium2" >nul 2>nul
 if not errorlevel 1 goto :deps_ok
 
 echo [MaSai] 缺少依赖，正在自动安装，请稍候...
 python -m pip install -r requirements.txt
 if errorlevel 1 goto :install_failed
-python -c "import PySide6, PIL, numpy" >nul 2>nul
+python -c "import PySide6, PIL, numpy, pypdfium2" >nul 2>nul
 if errorlevel 1 goto :install_failed
 goto :deps_ok
 

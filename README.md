@@ -10,7 +10,7 @@
 [![PySide6 / Qt 6](https://img.shields.io/badge/PySide6-Qt%206-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
 [![Pillow](https://img.shields.io/badge/Pillow-10%2B-8A6FBE?style=for-the-badge&logo=pypi&logoColor=white)](https://python-pillow.org/)
 [![NumPy](https://img.shields.io/badge/NumPy-1.24%2B-013243?style=for-the-badge&logo=numpy&logoColor=white)](https://numpy.org/)
-[![48 tests](https://img.shields.io/badge/Tests-48%20passed-6B4FBB?style=for-the-badge&logo=pytest&logoColor=white)]()
+[![61 tests](https://img.shields.io/badge/Tests-61%20passed-6B4FBB?style=for-the-badge&logo=pytest&logoColor=white)]()
 [![MIT](https://img.shields.io/badge/License-MIT-2EA44F?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 </div>
@@ -45,12 +45,20 @@ run.bat
 画布支持滚轮缩放、中键平移、拖四角改范围、`Delete` 删除选中区域。
 输出目录默认是 `原文件夹名_mosaic`，不能选原文件夹，**从不动原图**。
 
+## PDF 转图片
+
+顶部点「PDF 转图片」，添加一个或多个 PDF / 文件夹，设置 DPI、格式、页码后
+导出到单独文件夹；也可以直接把 PDF 拖进窗口。默认 **200 DPI + PNG**，
+文件名是 `原名_p001.png`，JPEG 可选质量 1~100，页码支持 `1-3,5` 这类写法。
+转换完只落盘，**不会自动进入打码流程**；导出的图片可以用「导入文件夹」再导入。
+
 ## 几个实现上的点
 
 - 区域和块大小都按图像比例保存，不同尺寸自动换算；宽高比差太多会在列表里提示
 - 块网格全局对齐，只统计并只改写框内像素，**框外逐字节不变**；重复处理幂等
 - 先按 EXIF 方向摆正，导出保留原格式与 ICC / EXIF（方向标记归正为 1）
 - 4 线程并行、可随时取消；动图 GIF、损坏文件跳过并在结束时列出原因
+- PDF 转图片用 pypdfium2，逐页渲染、可取消；同名 PDF 自动加父目录名避免覆盖
 - `masai/core` 完全不依赖 Qt，算法可单独测试
 
 算法取舍见 [设计稿](docs/superpowers/specs/2026-11-10-masai-mosaic-batch-design.md)，
@@ -62,7 +70,7 @@ run.bat
 python -m pytest tests -q
 ```
 
-48 个测试覆盖马赛克边界与不外溢、EXIF、导出格式、批量取消和界面冒烟。
+61 个测试覆盖马赛克边界与不外溢、EXIF、导出格式、批量取消、PDF 转换和界面冒烟。
 
 ## 许可证
 

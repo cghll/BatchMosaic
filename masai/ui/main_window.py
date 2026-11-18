@@ -53,6 +53,8 @@ from .batch_worker import BatchWorker
 from .export_dialog import ExportDialog
 from .icons import icon, pixmap
 from .image_canvas import ImageCanvas
+from .pdf_dialog import PdfDialog
+from .pdf_worker import PdfWorker
 from .theme import (
     APP_BAR_H,
     LEFT_W,
@@ -102,8 +104,10 @@ class MainWindow(QMainWindow):
         self._reset_block = False
         self._last_dir: Path | None = None
         self._last_out: Path | None = None
+        self._last_pdf_out: Path | None = None
         self._open_after = True
         self._worker: BatchWorker | None = None
+        self._pdf_worker: PdfWorker | None = None
         self._cancel: threading.Event | None = None
         self._theme = theme_manager()
 
@@ -138,6 +142,8 @@ class MainWindow(QMainWindow):
         self.act_import = QAction("导入文件夹", self)
         self.act_import.setShortcut(QKeySequence.Open)
         self.act_import.setToolTip("选择一个图片文件夹（Ctrl+O）")
+        self.act_pdf = QAction("PDF 转图片", self)
+        self.act_pdf.setToolTip("把 PDF 的每一页导出为图片，不会自动导入打码流程")
         self.act_fit = QAction("适应窗口", self)
         self.act_fit.setToolTip("适应窗口")
         self.act_zoom_in = QAction("放大", self)
@@ -150,6 +156,7 @@ class MainWindow(QMainWindow):
         self.act_theme = QAction("浅色", self)
 
         toolbar.addAction(self.act_import)
+        toolbar.addAction(self.act_pdf)
         toolbar.addSeparator()
         toolbar.addAction(self.act_fit)
         toolbar.addAction(self.act_zoom_out)
@@ -164,6 +171,7 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.act_export)
 
         self._tag_action(self.act_import, "textAction")
+        self._tag_action(self.act_pdf, "textAction")
         self._tag_action(self.act_fit, "frameAction")
         self._tag_action(self.act_zoom_out, "frameAction")
         self._tag_action(self.act_zoom_in, "frameAction")
@@ -485,6 +493,7 @@ class MainWindow(QMainWindow):
     def _on_theme_changed(self, palette) -> None:
         sub, muted, text = palette.text_sub, palette.text_muted, palette.text
         self.act_import.setIcon(icon("folder_open", text, 18, muted))
+        self.act_pdf.setIcon(icon("pdf", sub, 18, muted))
         self.act_fit.setIcon(icon("fit", sub, 18, muted))
         self.act_zoom_out.setIcon(icon("zoom_out", sub, 18, muted))
         self.act_zoom_in.setIcon(icon("zoom_in", sub, 18, muted))
@@ -504,7 +513,8 @@ class MainWindow(QMainWindow):
         self._empty_region_icon.setPixmap(pixmap("region", muted, 26))
 
         self.canvas.apply_palette(palette)
-        self._sync_status_dot("busy" if self._worker is not None else "idle")
+        busy = self._worker is not None or self._pdf_worker is not None
+        self._sync_status_dot("busy" if busy else "idle")
         if self._images:
             self._refresh_image_list()
         if self._regions:
@@ -519,6 +529,7 @@ class MainWindow(QMainWindow):
     # ---------------- 连接 ----------------
     def _connect(self) -> None:
         self.act_import.triggered.connect(self._choose_folder)
+        self.act_pdf.triggered.connect(lambda: self._convert_pdf())
         self.act_fit.triggered.connect(self.canvas.fit_view)
         self.act_zoom_in.triggered.connect(lambda: self.canvas.zoom_by(1.25))
         self.act_zoom_out.triggered.connect(lambda: self.canvas.zoom_by(1 / 1.25))
@@ -849,6 +860,7 @@ class MainWindow(QMainWindow):
         self.btn_clear.setEnabled(has_regions)
         self.slider_block.setEnabled(has_images)
         self.spin_block.setEnabled(has_images)
+        self.act_pdf.setEnabled(self._worker is None and self._pdf_worker is None)
         self.act_export.setEnabled(has_images and has_regions)
         self.act_fit.setEnabled(has_images)
         self.act_zoom_in.setEnabled(has_images)
@@ -959,11 +971,78 @@ class MainWindow(QMainWindow):
             self._cancel.set()
         if self._worker is not None:
             self._worker.cancel()
+        if self._pdf_worker is not None:
+            self._pdf_worker.cancel()
         self.lbl_status.setText("正在停止…")
         self.btn_cancel.setEnabled(False)
 
+    # ---------------- PDF 转图片 ----------------
+    def _convert_pdf(self, initial: list[Path] | None = None) -> None:
+        """打开转换对话框；转换结果只落盘，不会改动当前打码会话。"""
+        if self._worker is not None or self._pdf_worker is not None:
+            return
+        start = self._folder.parent if self._folder is not None else self._last_dir
+        dialog = PdfDialog(start, self)
+        if initial:
+            dialog._add_sources([Path(p) for p in initial])
+        if dialog.exec() != QDialog.Accepted:
+            return
+        sources = dialog.sources()
+        if not sources:
+            return
+        out_dir = dialog.out_dir()
+        self._last_pdf_out = out_dir
+        self._last_dir = out_dir.parent
+        self._start_pdf_batch(sources, out_dir, dialog.options(),
+                              dialog.open_when_done())
+
+    def _start_pdf_batch(self, sources: list[Path], out_dir: Path,
+                         options, open_after: bool = False) -> None:
+        self._cancel = threading.Event()
+        self._pdf_worker = PdfWorker(sources, out_dir, options, self)
+        self._open_after = open_after
+        self._pdf_worker.progressed.connect(self._on_pdf_progress)
+        self._pdf_worker.completed.connect(self._on_pdf_done)
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
+        self._set_busy(True)
+        self.lbl_status.setText(f"正在转换 PDF 到 {out_dir} …")
+        self._pdf_worker.start()
+
+    def _on_pdf_progress(self, done: int, total: int, name: str) -> None:
+        self.progress.setMaximum(max(total, 1))
+        self.progress.setValue(done)
+        self.lbl_status.setText(f"转换中 {done}/{total} · {name}")
+
+    def _on_pdf_done(self, report) -> None:
+        self._pdf_worker = None
+        self._set_busy(False)
+        self.progress.setValue(self.progress.maximum())
+        if report.cancelled:
+            self.lbl_status.setText(f"已取消 · 完成 {report.succeeded} 页")
+            self._sync_status_dot("idle")
+            return
+
+        summary = f"完成 {report.succeeded}/{report.total} 页\n输出目录：{report.out_dir}"
+        if report.failed:
+            lines = [f"· {r.label}：{r.error}" for r in report.failed[:15]]
+            if len(report.failed) > 15:
+                lines.append(f"… 另有 {len(report.failed) - 15} 页失败")
+            self.lbl_status.setText(
+                f"完成 {report.succeeded}/{report.total}，{len(report.failed)} 页失败")
+            self._sync_status_dot("error")
+            self._ask_open_folder(report.out_dir)
+            QMessageBox.warning(self, "部分页面未转换",
+                                summary + "\n\n" + "\n".join(lines))
+        else:
+            self.lbl_status.setText(f"PDF 转换完成 · {report.succeeded} 页")
+            self._sync_status_dot("ok")
+            QMessageBox.information(self, "转换完成", summary)
+            self._ask_open_folder(report.out_dir)
+
     def _set_busy(self, busy: bool) -> None:
         self.act_import.setEnabled(not busy)
+        self.act_pdf.setEnabled(not busy)
         self.act_export.setEnabled(not busy and bool(self._regions))
         self.act_fit.setEnabled(not busy and bool(self._images))
         self.act_zoom_in.setEnabled(not busy and bool(self._images))
@@ -985,6 +1064,10 @@ class MainWindow(QMainWindow):
     def dropEvent(self, event) -> None:
         for url in event.mimeData().urls():
             path = Path(url.toLocalFile())
+            if path.is_file() and path.suffix.lower() == ".pdf":
+                self._convert_pdf([path])
+                event.acceptProposedAction()
+                return
             if path.is_dir():
                 self.load_folder(path)
                 event.acceptProposedAction()
@@ -998,4 +1081,7 @@ class MainWindow(QMainWindow):
         if self._worker is not None and self._worker.isRunning():
             self._cancel_batch()
             self._worker.wait(3000)
+        if self._pdf_worker is not None and self._pdf_worker.isRunning():
+            self._cancel_batch()
+            self._pdf_worker.wait(3000)
         super().closeEvent(event)
